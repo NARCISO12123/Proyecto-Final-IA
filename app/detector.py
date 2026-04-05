@@ -11,14 +11,13 @@ import torch
 from PIL import Image
 from torchvision import transforms
 
-from modelo import CLASES, CLASES_ES, EMOCIONES_INFO, DISPOSITIVO, cargar_modelo
+from modelo import CLASES, CLASES_ES, EMOCIONES_INFO, DISPOSITIVO, UMBRAL_CONFIANZA, cargar_modelo
 
-# Rutas de los modelos DNN de OpenCV
+# Rutas del detector DNN
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROTOTXT   = os.path.join(BASE_DIR, "models_cv", "deploy.prototxt")
 CAFFEMODEL = os.path.join(BASE_DIR, "models_cv", "res10_300x300_ssd_iter_140000.caffemodel")
 
-# Detector DNN — mas preciso que Haar Cascade
 DETECTOR_DNN = cv2.dnn.readNetFromCaffe(PROTOTXT, CAFFEMODEL)
 
 # Misma normalizacion usada en el entrenamiento
@@ -36,7 +35,6 @@ historial_sesion = []
 def recortar_rostro(imagen_np):
     """Detecta el rostro con DNN y retorna (recorte, detectado)."""
     h, w = imagen_np.shape[:2]
-
     blob = cv2.dnn.blobFromImage(
         cv2.resize(imagen_np, (300, 300)), 1.0,
         (300, 300), (104.0, 177.0, 123.0)
@@ -78,12 +76,21 @@ def placeholder_html():
     </div>'''
 
 
+def sin_emocion_html():
+    """HTML cuando la confianza es baja y no hay emocion clara."""
+    return '''
+    <div style="background:white;border-radius:16px;padding:1.5rem;text-align:center;border:1px solid #e0e0e0;">
+        <div style="font-size:3.5rem;">😶</div>
+        <div style="font-size:1.3rem;font-weight:700;color:#888;margin:0.5rem 0;">Ninguna emocion clara</div>
+        <div style="font-size:0.9rem;color:#aaa;">La confianza es muy baja para determinar una emocion.</div>
+    </div>'''
+
+
 def predecir_emocion(imagen_np):
     if imagen_np is None:
         return placeholder_html()
 
     try:
-        # Recortar rostro antes de clasificar
         rostro_np, detectado = recortar_rostro(imagen_np)
 
         aviso = ''
@@ -97,13 +104,19 @@ def predecir_emocion(imagen_np):
         with torch.no_grad():
             probabilidades = torch.softmax(modelo(tensor), dim=1)[0]
 
-        top3      = torch.topk(probabilidades, 3)
+        top3      = torch.topk(probabilidades, min(3, len(CLASES)))
         top3_idx  = top3.indices.tolist()
         top3_vals = top3.values.tolist()
 
+        confianza_principal = top3_vals[0]
+
+        # Si la confianza es baja, no mostrar emocion
+        if confianza_principal < UMBRAL_CONFIANZA:
+            return sin_emocion_html()
+
         emocion_key = CLASES[top3_idx[0]]
         emocion_es  = CLASES_ES[emocion_key]
-        confianza   = top3_vals[0] * 100
+        confianza   = confianza_principal * 100
         info        = EMOCIONES_INFO[emocion_key]
 
         historial_sesion.append({
@@ -115,7 +128,7 @@ def predecir_emocion(imagen_np):
             'tiempo':      datetime.datetime.now().strftime('%H:%M:%S'),
         })
 
-        # Barras de las top 3 predicciones
+        # Barras top 3
         barras = ''
         for idx, val in zip(top3_idx, top3_vals):
             key   = CLASES[idx]
@@ -141,7 +154,7 @@ def predecir_emocion(imagen_np):
             <div style="font-size:2.2rem;font-weight:700;color:{info["color"]};">{confianza:.1f}%</div>
             <div style="font-size:0.75rem;color:#666;margin-bottom:1.2rem;">confianza</div>
             <div style="width:100%;text-align:left;">
-                <div style="font-size:0.8rem;color:#555;margin-bottom:8px;">Top 3 predicciones</div>
+                <div style="font-size:0.8rem;color:#555;margin-bottom:8px;">Top predicciones</div>
                 {barras}
             </div>
             <div style="font-size:0.75rem;color:#666;margin-top:1rem;">
