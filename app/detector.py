@@ -9,7 +9,7 @@ import torch
 from PIL import Image
 from torchvision import transforms
 
-from Modelo import CLASES, CLASES_ES, EMOCIONES_INFO, DISPOSITIVO, cargar_modelo
+from modelo import CLASES, CLASES_ES, EMOCIONES_INFO, DISPOSITIVO, cargar_modelo
 
 # Clasificador de rostros frontales de OpenCV
 DETECTOR_ROSTRO = cv2.CascadeClassifier(

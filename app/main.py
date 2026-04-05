@@ -2,8 +2,8 @@
 # Matricula: 24-EISN-2-026
 
 import gradio as gr
-from Modelo import CLASES_ES, EMOCIONES_INFO
-from Detector import predecir_emocion, actualizar_historial, placeholder_html
+from modelo import CLASES_ES, EMOCIONES_INFO
+from detector import predecir_emocion, actualizar_historial, placeholder_html
 
 CSS = """
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@700&display=swap');
@@ -39,7 +39,6 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
                     resultado_img = gr.HTML(value=placeholder_html())
 
             btn_analizar.click(fn=predecir_emocion, inputs=imagen_input, outputs=resultado_img)
-            imagen_input.change(fn=predecir_emocion, inputs=imagen_input, outputs=resultado_img)
 
             gr.Markdown("### Las 7 emociones que el modelo reconoce")
             with gr.Row():
@@ -62,7 +61,6 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
                     resultado_cam = gr.HTML(value=placeholder_html())
 
             btn_camara.click(fn=predecir_emocion, inputs=camara_input, outputs=resultado_cam)
-            camara_input.change(fn=predecir_emocion, inputs=camara_input, outputs=resultado_cam)
 
         # Tab 3: historial de predicciones de la sesion
         with gr.Tab("📊 Historial"):
