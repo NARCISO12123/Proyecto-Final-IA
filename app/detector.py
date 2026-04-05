@@ -1,20 +1,25 @@
 # Nombre: Narciso Beras
 # Matricula: 24-EISN-2-026
 
+import os
 import datetime
 from collections import Counter
 
 import cv2
+import numpy as np
 import torch
 from PIL import Image
 from torchvision import transforms
 
 from modelo import CLASES, CLASES_ES, EMOCIONES_INFO, DISPOSITIVO, cargar_modelo
 
-# Clasificador de rostros frontales de OpenCV
-DETECTOR_ROSTRO = cv2.CascadeClassifier(
-    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-)
+# Rutas de los modelos DNN de OpenCV
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+PROTOTXT   = os.path.join(BASE_DIR, "models_cv", "deploy.prototxt")
+CAFFEMODEL = os.path.join(BASE_DIR, "models_cv", "res10_300x300_ssd_iter_140000.caffemodel")
+
+# Detector DNN — mas preciso que Haar Cascade
+DETECTOR_DNN = cv2.dnn.readNetFromCaffe(PROTOTXT, CAFFEMODEL)
 
 # Misma normalizacion usada en el entrenamiento
 transform = transforms.Compose([
@@ -29,23 +34,35 @@ historial_sesion = []
 
 
 def recortar_rostro(imagen_np):
-    """Detecta el rostro mas grande y retorna (recorte, detectado)."""
-    gris    = cv2.cvtColor(imagen_np, cv2.COLOR_RGB2GRAY)
-    rostros = DETECTOR_ROSTRO.detectMultiScale(
-        gris, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
-    )
+    """Detecta el rostro con DNN y retorna (recorte, detectado)."""
+    h, w = imagen_np.shape[:2]
 
-    if len(rostros) == 0:
+    blob = cv2.dnn.blobFromImage(
+        cv2.resize(imagen_np, (300, 300)), 1.0,
+        (300, 300), (104.0, 177.0, 123.0)
+    )
+    DETECTOR_DNN.setInput(blob)
+    detecciones = DETECTOR_DNN.forward()
+
+    mejor_conf = 0
+    mejor_box  = None
+
+    for i in range(detecciones.shape[2]):
+        confianza = detecciones[0, 0, i, 2]
+        if confianza > 0.5 and confianza > mejor_conf:
+            mejor_conf = confianza
+            box = detecciones[0, 0, i, 3:7] * np.array([w, h, w, h])
+            mejor_box = box.astype(int)
+
+    if mejor_box is None:
         return imagen_np, False
 
-    x, y, w, h = max(rostros, key=lambda r: r[2] * r[3])
-
-    # Margen del 20% alrededor del rostro
-    margen = int(min(w, h) * 0.2)
-    x1 = max(0, x - margen)
-    y1 = max(0, y - margen)
-    x2 = min(imagen_np.shape[1], x + w + margen)
-    y2 = min(imagen_np.shape[0], y + h + margen)
+    x1, y1, x2, y2 = mejor_box
+    margen = int(min(x2 - x1, y2 - y1) * 0.2)
+    x1 = max(0, x1 - margen)
+    y1 = max(0, y1 - margen)
+    x2 = min(w, x2 + margen)
+    y2 = min(h, y2 + margen)
 
     return imagen_np[y1:y2, x1:x2], True
 
@@ -107,7 +124,7 @@ def predecir_emocion(imagen_np):
             barras += f'''
             <div style="margin-bottom:8px;">
                 <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:3px;">
-                    <span>{CLASES_ES[key]}</span>
+                    <span style="color:#333;">{CLASES_ES[key]}</span>
                     <span style="color:{color};font-weight:600;">{pct:.1f}%</span>
                 </div>
                 <div style="background:#e0e0e0;border-radius:8px;height:8px;">
@@ -116,18 +133,18 @@ def predecir_emocion(imagen_np):
             </div>'''
 
         return f'''
-        <div style="background:#f8f9fa;border-radius:16px;padding:1.5rem;text-align:center;border:1px solid #e0e0e0;">
+        <div style="background:white;border-radius:16px;padding:1.5rem;text-align:center;border:1px solid #e0e0e0;">
             {aviso}
             <div style="font-size:3.5rem;">{info["emoji"]}</div>
             <div style="font-size:1.5rem;font-weight:700;color:{info["color"]};margin:0.5rem 0;">{emocion_es}</div>
-            <div style="font-size:0.9rem;color:#666;margin-bottom:0.5rem;">{info["descripcion"]}</div>
+            <div style="font-size:0.9rem;color:#555;margin-bottom:0.5rem;">{info["descripcion"]}</div>
             <div style="font-size:2.2rem;font-weight:700;color:{info["color"]};">{confianza:.1f}%</div>
-            <div style="font-size:0.75rem;color:#aaa;margin-bottom:1.2rem;">confianza</div>
+            <div style="font-size:0.75rem;color:#666;margin-bottom:1.2rem;">confianza</div>
             <div style="width:100%;text-align:left;">
-                <div style="font-size:0.8rem;color:#888;margin-bottom:8px;">Top 3 predicciones</div>
+                <div style="font-size:0.8rem;color:#555;margin-bottom:8px;">Top 3 predicciones</div>
                 {barras}
             </div>
-            <div style="font-size:0.75rem;color:#aaa;margin-top:1rem;">
+            <div style="font-size:0.75rem;color:#666;margin-top:1rem;">
                 {'✅ Rostro detectado' if detectado else '⚠️ Sin deteccion de rostro'}
             </div>
         </div>'''
