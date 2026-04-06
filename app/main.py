@@ -29,7 +29,7 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
 
     with gr.Tabs():
 
-        # Tab 1: subir imagen desde archivo o portapapeles
+        # Tab 1: subir imagen
         with gr.Tab("📷 Subir imagen"):
             with gr.Row():
                 with gr.Column(scale=1):
@@ -40,7 +40,7 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
 
             btn_analizar.click(fn=predecir_emocion, inputs=imagen_input, outputs=resultado_img)
 
-            gr.Markdown("### Las 7 emociones que el modelo reconoce")
+            gr.Markdown("### Las emociones que el modelo reconoce")
             with gr.Row():
                 for key, info in EMOCIONES_INFO.items():
                     gr.HTML(f'''
@@ -50,19 +50,31 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
                         <div style="font-size:0.75rem;color:#888;margin-top:0.3rem;">{info["descripcion"]}</div>
                     </div>''')
 
-        # Tab 2: captura desde camara web
-        with gr.Tab("📹 Camara"):
-            gr.Markdown("### Captura una foto con la camara y analiza la emocion")
+        # Tab 2: camara en tiempo real con streaming
+        with gr.Tab("📹 Camara en vivo"):
+            gr.Markdown("### Deteccion de emociones en tiempo real")
             with gr.Row():
                 with gr.Column(scale=1):
-                    camara_input = gr.Image(sources=["webcam"], label="Camara", type="numpy", height=320)
-                    btn_camara   = gr.Button("🔍 Analizar foto", variant="primary", size="lg")
+                    camara_stream = gr.Image(
+                        sources=["webcam"],
+                        streaming=True,
+                        label="Camara",
+                        type="numpy",
+                        height=320
+                    )
                 with gr.Column(scale=1):
-                    resultado_cam = gr.HTML(value=placeholder_html())
+                    resultado_stream = gr.HTML(value=placeholder_html())
 
-            btn_camara.click(fn=predecir_emocion, inputs=camara_input, outputs=resultado_cam)
+            # stream envia cada frame automaticamente
+            camara_stream.stream(
+                fn=predecir_emocion,
+                inputs=camara_stream,
+                outputs=resultado_stream,
+                time_limit=30,
+                stream_every=0.5  # analizar cada 0.5 segundos
+            )
 
-        # Tab 3: historial de predicciones de la sesion
+        # Tab 3: historial
         with gr.Tab("📊 Historial"):
             gr.Markdown("### Analisis de esta sesion")
             historial_output = gr.HTML(value='<div style="text-align:center;color:#aaa;padding:2rem;">Sin analisis aun.</div>')
@@ -74,12 +86,12 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
             <div style="max-width:700px;margin:0 auto;padding:2rem;">
                 <h2 style="color:#1D9E75;font-family:serif;">Detector de Emociones Faciales</h2>
                 <p style="color:#555;line-height:1.7;">
-                    Detecta rostros con <strong>OpenCV</strong> y clasifica 7 emociones
+                    Detecta rostros con <strong>OpenCV</strong> y clasifica 4 emociones
                     usando <strong>EfficientNet-B0</strong> entrenado con <strong>FER-2013</strong>.
                 </p>
                 <h3 style="color:#378ADD;">Tecnologias</h3>
                 <ul style="color:#555;line-height:2;">
-                    <li><strong>OpenCV</strong> — Deteccion de rostros</li>
+                    <li><strong>OpenCV DNN</strong> — Deteccion de rostros</li>
                     <li><strong>PyTorch + timm</strong> — Modelo de deep learning</li>
                     <li><strong>EfficientNet-B0</strong> — Arquitectura principal</li>
                     <li><strong>FER-2013</strong> — Dataset de entrenamiento</li>
