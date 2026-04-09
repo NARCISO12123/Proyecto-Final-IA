@@ -13,17 +13,16 @@ from torchvision import transforms
 
 from modelo import CLASES, CLASES_ES, EMOCIONES_INFO, DISPOSITIVO, UMBRAL_CONFIANZA, cargar_modelo
 
-# Rutas del detector DNN
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROTOTXT   = os.path.join(BASE_DIR, "models_cv", "deploy.prototxt")
 CAFFEMODEL = os.path.join(BASE_DIR, "models_cv", "res10_300x300_ssd_iter_140000.caffemodel")
 
 DETECTOR_DNN = cv2.dnn.readNetFromCaffe(PROTOTXT, CAFFEMODEL)
 
-# Misma normalizacion usada en el entrenamiento
+# SIZE=224 igual que en el entrenamiento v9
 transform = transforms.Compose([
     transforms.Grayscale(num_output_channels=3),
-    transforms.Resize((48, 48)),
+    transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
@@ -77,7 +76,6 @@ def placeholder_html():
 
 
 def sin_emocion_html():
-    """HTML cuando la confianza es baja y no hay emocion clara."""
     return '''
     <div style="background:white;border-radius:16px;padding:1.5rem;text-align:center;border:1px solid #e0e0e0;">
         <div style="font-size:3.5rem;">😶</div>
@@ -110,7 +108,6 @@ def predecir_emocion(imagen_np):
 
         confianza_principal = top3_vals[0]
 
-        # Si la confianza es baja, no mostrar emocion
         if confianza_principal < UMBRAL_CONFIANZA:
             return sin_emocion_html()
 
@@ -128,7 +125,6 @@ def predecir_emocion(imagen_np):
             'tiempo':      datetime.datetime.now().strftime('%H:%M:%S'),
         })
 
-        # Barras top 3
         barras = ''
         for idx, val in zip(top3_idx, top3_vals):
             key   = CLASES[idx]
