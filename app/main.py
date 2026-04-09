@@ -1,6 +1,7 @@
 # Nombre: Narciso Beras
 # Matricula: 24-EISN-2-026
 
+import qrcode
 import gradio as gr
 from modelo import CLASES_ES, EMOCIONES_INFO
 from detector import predecir_emocion, actualizar_historial, placeholder_html
@@ -16,6 +17,14 @@ body, .gradio-container { font-family: 'DM Sans', sans-serif !important; }
 .titulo-app h1 { font-family: 'Playfair Display', serif; font-size: 2.2rem; font-weight: 700; color: #1D9E75; margin-bottom: 0.3rem; }
 .titulo-app p  { color: #888780; font-size: 0.95rem; }
 """
+
+def generar_qr(url):
+    """Genera un QR de la URL publica y lo guarda como imagen."""
+    img = qrcode.make(url)
+    ruta = "/tmp/qr_app.png"
+    img.save(ruta)
+    return ruta
+
 
 with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
 
@@ -50,7 +59,7 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
                         <div style="font-size:0.75rem;color:#888;margin-top:0.3rem;">{info["descripcion"]}</div>
                     </div>''')
 
-        # Tab 2: camara en tiempo real con streaming
+        # Tab 2: camara en tiempo real
         with gr.Tab("📹 Camara en vivo"):
             gr.Markdown("### Deteccion de emociones en tiempo real")
             with gr.Row():
@@ -65,13 +74,12 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
                 with gr.Column(scale=1):
                     resultado_stream = gr.HTML(value=placeholder_html())
 
-            # stream envia cada frame automaticamente
             camara_stream.stream(
                 fn=predecir_emocion,
                 inputs=camara_stream,
                 outputs=resultado_stream,
                 time_limit=30,
-                stream_every=0.5  # analizar cada 0.5 segundos
+                stream_every=0.5
             )
 
         # Tab 3: historial
@@ -80,6 +88,17 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
             historial_output = gr.HTML(value='<div style="text-align:center;color:#aaa;padding:2rem;">Sin analisis aun.</div>')
             btn_refrescar    = gr.Button("🔄 Refrescar")
             btn_refrescar.click(fn=actualizar_historial, outputs=historial_output)
+
+        # Tab 4: QR para acceder desde celular
+        with gr.Tab("📱 Codigo QR"):
+            gr.Markdown("### Escanea el QR para abrir la app en tu celular")
+            url_input = gr.Textbox(
+                label="URL publica de Gradio",
+                placeholder="Pega aqui el link https://xxxxx.gradio.live"
+            )
+            btn_qr  = gr.Button("Generar QR", variant="primary")
+            qr_img  = gr.Image(label="QR", height=300)
+            btn_qr.click(fn=generar_qr, inputs=url_input, outputs=qr_img)
 
         with gr.Tab("ℹ️ Acerca de"):
             gr.HTML("""
