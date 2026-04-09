@@ -19,11 +19,13 @@ body, .gradio-container { font-family: 'DM Sans', sans-serif !important; }
 """
 
 def generar_qr(url):
-    """Genera un QR de la URL publica y lo guarda como imagen."""
-    img = qrcode.make(url)
-    ruta = "/tmp/qr_app.png"
-    img.save(ruta)
-    return ruta
+    """Genera un QR de la URL publica y lo retorna como array numpy."""
+    import numpy as np
+    if not url or not url.strip():
+        return None
+    img = qrcode.make(url.strip())
+    img = img.convert("RGB")
+    return np.array(img)
 
 
 with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
@@ -59,28 +61,22 @@ with gr.Blocks(css=CSS, title="Detector de Emociones — Narciso Beras") as app:
                         <div style="font-size:0.75rem;color:#888;margin-top:0.3rem;">{info["descripcion"]}</div>
                     </div>''')
 
-        # Tab 2: camara en tiempo real
-        with gr.Tab("📹 Camara en vivo"):
-            gr.Markdown("### Deteccion de emociones en tiempo real")
+        # Tab 2: camara — toma foto y analiza
+        with gr.Tab("📹 Camara"):
+            gr.Markdown("### Toma una foto y detecta la emocion")
             with gr.Row():
                 with gr.Column(scale=1):
-                    camara_stream = gr.Image(
+                    camara_input = gr.Image(
                         sources=["webcam"],
-                        streaming=True,
                         label="Camara",
                         type="numpy",
                         height=320
                     )
+                    btn_foto = gr.Button("📸 Analizar foto", variant="primary", size="lg")
                 with gr.Column(scale=1):
-                    resultado_stream = gr.HTML(value=placeholder_html())
+                    resultado_cam = gr.HTML(value=placeholder_html())
 
-            camara_stream.stream(
-                fn=predecir_emocion,
-                inputs=camara_stream,
-                outputs=resultado_stream,
-                time_limit=30,
-                stream_every=0.5
-            )
+            btn_foto.click(fn=predecir_emocion, inputs=camara_input, outputs=resultado_cam)
 
         # Tab 3: historial
         with gr.Tab("📊 Historial"):

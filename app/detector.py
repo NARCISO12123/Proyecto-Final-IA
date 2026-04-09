@@ -19,10 +19,9 @@ CAFFEMODEL = os.path.join(BASE_DIR, "models_cv", "res10_300x300_ssd_iter_140000.
 
 DETECTOR_DNN = cv2.dnn.readNetFromCaffe(PROTOTXT, CAFFEMODEL)
 
-# SIZE=224 igual que en el entrenamiento v9
 transform = transforms.Compose([
     transforms.Grayscale(num_output_channels=3),
-    transforms.Resize((224, 224)),
+    transforms.Resize((48, 48)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
@@ -30,10 +29,29 @@ transform = transforms.Compose([
 modelo           = cargar_modelo()
 historial_sesion = []
 
+# Cache del ultimo rostro detectado para no recalcular en cada frame
+_ultimo_box = None
+_frames_sin_deteccion = 0
+REDETECTAR_CADA = 15  # redetectar rostro cada N frames
 
-def recortar_rostro(imagen_np):
-    """Detecta el rostro con DNN y retorna (recorte, detectado)."""
+
+def recortar_rostro(imagen_np, forzar=False):
+    """
+    Detecta el rostro con DNN. Usa cache para no recalcular en cada frame,
+    mejorando la fluidez del streaming.
+    """
+    global _ultimo_box, _frames_sin_deteccion
+
     h, w = imagen_np.shape[:2]
+
+    # Usar box cacheado si existe y no toca redetectar
+    if _ultimo_box is not None and not forzar and _frames_sin_deteccion < REDETECTAR_CADA:
+        _frames_sin_deteccion += 1
+        x1, y1, x2, y2 = _ultimo_box
+        return imagen_np[y1:y2, x1:x2], True
+
+    _frames_sin_deteccion = 0
+
     blob = cv2.dnn.blobFromImage(
         cv2.resize(imagen_np, (300, 300)), 1.0,
         (300, 300), (104.0, 177.0, 123.0)
@@ -52,6 +70,7 @@ def recortar_rostro(imagen_np):
             mejor_box = box.astype(int)
 
     if mejor_box is None:
+        _ultimo_box = None
         return imagen_np, False
 
     x1, y1, x2, y2 = mejor_box
@@ -61,6 +80,7 @@ def recortar_rostro(imagen_np):
     x2 = min(w, x2 + margen)
     y2 = min(h, y2 + margen)
 
+    _ultimo_box = (x1, y1, x2, y2)
     return imagen_np[y1:y2, x1:x2], True
 
 
@@ -160,6 +180,38 @@ def predecir_emocion(imagen_np):
 
     except Exception as e:
         return f'<div style="color:#D85A30;padding:1rem;border-radius:12px;background:#fff3f0;">Error: {str(e)}</div>'
+
+
+# Haar Cascade para streaming — mas rapido que DNN
+HAAR = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+
+def recortar_rostro_rapido(imagen_np):
+    """Haar Cascade — mas rapido para streaming en tiempo real."""
+    gris    = cv2.cvtColor(imagen_np, cv2.COLOR_RGB2GRAY)
+    rostros = HAAR.detectMultiScale(gris, scaleFactor=1.1, minNeighbors=5, minSize=(30,30))
+    if len(rostros) == 0:
+        return imagen_np
+    x, y, w, h = max(rostros, key=lambda r: r[2]*r[3])
+    return imagen_np[y:y+h, x:x+w]
+
+
+def predecir_stream(imagen_np):
+    """Version ligera para streaming — retorna solo emoji, emocion y confianza."""
+    if imagen_np is None:
+        return "😶", "Esperando...", "-"
+    try:
+        rostro_np = recortar_rostro_rapido(imagen_np)
+        tensor = transform(Image.fromarray(rostro_np.astype("uint8"))).unsqueeze(0).to(DISPOSITIVO)
+        with torch.no_grad():
+            probabilidades = torch.softmax(modelo(tensor), dim=1)[0]
+        idx      = probabilidades.argmax().item()
+        conf     = probabilidades[idx].item()
+        if conf < UMBRAL_CONFIANZA:
+            return "😶", "Ninguna emocion clara", f"{conf*100:.0f}%"
+        key = CLASES[idx]
+        return EMOCIONES_INFO[key]["emoji"], CLASES_ES[key], f"{conf*100:.0f}%"
+    except:
+        return "😶", "Error", "-"
 
 
 def actualizar_historial():
