@@ -6,9 +6,6 @@ Narciso Beras
 ## Matrícula:
 24-EISN-2-026
 
-## Link de youtube: 
-https://youtu.be/GxCmpWhYz3c?si=kIya6Fro-UdARtHU
-
 ## Proyecto
 
 DESCRIPCION GENERAL
